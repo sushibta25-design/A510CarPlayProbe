@@ -1,18 +1,12 @@
-# A510CarPlayProbe v0.4
+# A510CarPlayProbe v0.5
+Use this build for the in-car test.
 
-Focused logger for the next layer after CRCarPlayAppPolicy:
-- _SBSCarPlayApplicationInfo
-- FBScene attach/detach
-- SBApplicationSceneView
-- SBDeviceApplicationSceneView
+1. Install and respring before connecting CarPlay.
+2. Leave A510Player OFF in CarBridge and connect wired CarPlay.
+3. Wait 10 sec; try to find/open A510Player (expected absent).
+4. Tick A510Player ON in CarBridge.
+5. Return to CarPlay, wait 10 sec, open A510Player from CarPlay.
+6. Keep it open 10 sec, then return Home.
+7. Send /var/mobile/A510CarPlayProbe-v05.txt.
 
-It only logs original runtime behavior and does not force an app onto CarPlay.
-
-Test at home:
-1. Build/install v0.4 and respring.
-2. Leave A510Player ON in CarBridge first.
-3. Open A510Player on iPhone once.
-4. Toggle A510 OFF -> ON in CarBridge.
-5. Send /var/mobile/A510CarPlayProbe-v04.txt.
-
-For the most useful scene-hosting evidence, repeat once while actually connected to CarPlay later.
+Do not delete the log between OFF and ON.

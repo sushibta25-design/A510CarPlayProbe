@@ -1,8 +1,9 @@
 {
-    Filter = {
-        Bundles = (
-            "com.apple.springboard",
-            "com.apple.CarPlayApp"
-        );
-    };
+ Filter = {
+  Bundles = (
+   "com.apple.springboard",
+   "com.apple.CarPlayApp",
+   "com.sushibta.a510player"
+  );
+ };
 }
