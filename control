@@ -1,8 +1,8 @@
 Package: com.sushibta.a510carplayprobe
 Name: A510CarPlayProbe
-Version: 0.3.1
+Version: 0.4.0
 Architecture: iphoneos-arm64
-Description: Focused CarPlay policy runtime probe for A510Player.
+Description: Focused runtime probe for CarPlay app enumeration and scene hosting.
 Maintainer: sushibta25-design
 Author: sushibta25-design
 Section: Tweaks
