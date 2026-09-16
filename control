@@ -1,0 +1,9 @@
+Package: com.sushibta.a510carplayprobe
+Name: A510CarPlayProbe
+Version: 0.1.0
+Architecture: iphoneos-arm64
+Description: Diagnostic logger for A510Player and CarPlay/CarBridge state changes.
+Maintainer: sushibta25-design
+Author: sushibta25-design
+Section: Tweaks
+Depends: mobilesubstrate
