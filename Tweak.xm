@@ -1,21 +1,18 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <notify.h>
+#import <objc/runtime.h>
 
-static NSString * const kProbePath = @"/var/mobile/A510CarPlayProbe.txt";
+static NSString * const kPath = @"/var/mobile/A510CarPlayProbe-v02.txt";
 
-static void ProbeWrite(NSString *event) {
+static void W(NSString *s) {
     @autoreleasepool {
-        NSString *proc = NSProcessInfo.processInfo.processName ?: @"?";
-        NSString *bundle = NSBundle.mainBundle.bundleIdentifier ?: @"?";
-        NSString *line = [NSString stringWithFormat:@"%@ | process=%@ | bundle=%@ | %@\n",
-                          [NSDate date], proc, bundle, event ?: @""];
-
-        NSFileManager *fm = NSFileManager.defaultManager;
-        if (![fm fileExistsAtPath:kProbePath]) {
-            [@"" writeToFile:kProbePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        }
-        NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:kProbePath];
+        NSString *line = [NSString stringWithFormat:@"%@ | %@ | %@\n",
+            [NSDate date],
+            NSBundle.mainBundle.bundleIdentifier ?: @"?",
+            s ?: @""];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:kPath])
+            [@"" writeToFile:kPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        NSFileHandle *h=[NSFileHandle fileHandleForWritingAtPath:kPath];
         if (h) {
             [h seekToEndOfFile];
             [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
@@ -24,83 +21,79 @@ static void ProbeWrite(NSString *event) {
     }
 }
 
-static void ProbeSnapshot(NSString *why) {
-    ProbeWrite([NSString stringWithFormat:@"SNAPSHOT %@", why]);
+static BOOL Interesting(NSString *name) {
+    NSString *n=name.lowercaseString;
+    return [n containsString:@"carplay"] ||
+           [n containsString:@"scene"] ||
+           [n containsString:@"display"] ||
+           [n containsString:@"dashboard"];
+}
 
-    NSArray *roots = @[
-        @"/var/mobile/Library/Preferences",
-        @"/var/jb/var/mobile/Library/Preferences"
+static void DumpMethods(Class c) {
+    if (!c) return;
+    unsigned int count=0;
+    Method *m=class_copyMethodList(c,&count);
+    NSMutableArray *a=[NSMutableArray array];
+    for (unsigned int i=0;i<count;i++) {
+        NSString *s=NSStringFromSelector(method_getName(m[i]));
+        if (Interesting(s)) [a addObject:s];
+    }
+    free(m);
+    if (a.count) W([NSString stringWithFormat:@"CLASS %@ METHODS %@",NSStringFromClass(c),a]);
+}
+
+static void Snapshot(void) {
+    int count=objc_getClassList(NULL,0);
+    if (count<=0) return;
+    Class *classes=(Class *)malloc(sizeof(Class)*count);
+    count=objc_getClassList(classes,count);
+
+    W([NSString stringWithFormat:@"=== RUNTIME SNAPSHOT classes=%d process=%@ ===",
+       count, NSProcessInfo.processInfo.processName]);
+
+    for (int i=0;i<count;i++) {
+        Class c=classes[i];
+        NSString *name=NSStringFromClass(c);
+        if (Interesting(name)) DumpMethods(c);
+    }
+    free(classes);
+
+    NSArray *targets=@[
+      @"SpringBoard",
+      @"SBApplicationController",
+      @"SBApplication",
+      @"SBDeviceApplicationSceneView",
+      @"SBApplicationSceneView",
+      @"FBScene",
+      @"FBSScene",
+      @"FBSSceneClientSettings",
+      @"FBSDisplayConfiguration",
+      @"CARSessionStatus",
+      @"CRCarPlayAppPolicy",
+      @"CRSUIClusterController",
+      @"CRSUIApplicationSceneSettings"
     ];
-    NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *dir in roots) {
-        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-        for (NSString *name in files) {
-            NSString *lower = name.lowercaseString;
-            if ([lower containsString:@"carbridge"] ||
-                [lower containsString:@"carplay"] ||
-                [lower containsString:@"a510"]) {
-                NSString *full = [dir stringByAppendingPathComponent:name];
-                NSDictionary *attrs = [fm attributesOfItemAtPath:full error:nil];
-                ProbeWrite([NSString stringWithFormat:@"PREF %@ modified=%@ size=%@",
-                            full,
-                            attrs[NSFileModificationDate] ?: @"?",
-                            attrs[NSFileSize] ?: @"?"]);
-            }
-        }
+    for (NSString *n in targets) {
+        Class c=NSClassFromString(n);
+        W([NSString stringWithFormat:@"TARGET %@ = %@",n,c?@"PRESENT":@"ABSENT"]);
+        if (c) DumpMethods(c);
     }
 }
 
-%hook UIApplication
-
-- (void)didAddSubview:(UIView *)view {
-    %orig;
-}
-
-%end
-
 %ctor {
     @autoreleasepool {
-        ProbeWrite(@"=== PROBE LOADED ===");
-        ProbeSnapshot(@"startup");
-
-        int token = 0;
-        notify_register_dispatch("com.apple.springboard.lockstate", &token,
-                                 dispatch_get_main_queue(), ^(int t) {
-            ProbeSnapshot(@"springboard.lockstate");
+        W(@"PROBE v0.2 LOADED (read-only)");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5*NSEC_PER_SEC),
+                       dispatch_get_main_queue(), ^{
+            Snapshot();
         });
 
         [[NSNotificationCenter defaultCenter]
-            addObserverForName:UIApplicationDidBecomeActiveNotification
-                        object:nil
-                         queue:NSOperationQueue.mainQueue
-                    usingBlock:^(NSNotification *n) {
-            ProbeSnapshot(@"UIApplicationDidBecomeActive");
-        }];
-
-        [[NSNotificationCenter defaultCenter]
-            addObserverForName:UIApplicationWillResignActiveNotification
-                        object:nil
-                         queue:NSOperationQueue.mainQueue
-                    usingBlock:^(NSNotification *n) {
-            ProbeSnapshot(@"UIApplicationWillResignActive");
-        }];
-
-        [[NSNotificationCenter defaultCenter]
-            addObserverForName:UISceneDidActivateNotification
-                        object:nil
-                         queue:NSOperationQueue.mainQueue
-                    usingBlock:^(NSNotification *n) {
-            ProbeWrite([NSString stringWithFormat:@"SCENE ACTIVE %@", n.object]);
-            ProbeSnapshot(@"scene-active");
-        }];
-
-        [[NSNotificationCenter defaultCenter]
-            addObserverForName:UISceneWillDeactivateNotification
-                        object:nil
-                         queue:NSOperationQueue.mainQueue
-                    usingBlock:^(NSNotification *n) {
-            ProbeWrite([NSString stringWithFormat:@"SCENE DEACTIVATE %@", n.object]);
-            ProbeSnapshot(@"scene-deactivate");
-        }];
+         addObserverForName:UISceneDidActivateNotification
+         object:nil queue:NSOperationQueue.mainQueue
+         usingBlock:^(NSNotification *n){
+            W([NSString stringWithFormat:@"SCENE ACTIVE class=%@ desc=%@",
+               NSStringFromClass([n.object class]), n.object]);
+         }];
     }
 }

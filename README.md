@@ -1,12 +1,10 @@
-# A510CarPlayProbe
+# A510CarPlayProbe v0.2
 
-Rootless diagnostic tweak. No NewTerm commands are required.
+Read-only runtime inventory probe for iOS 16.
 
-After installing and respringing:
-1. Open CarBridge.
-2. Untick A510Player, wait a few seconds.
-3. Tick A510Player, wait a few seconds.
-4. Connect/disconnect CarPlay or open A510Player if useful.
-5. In Filza open `/var/mobile/A510CarPlayProbe.txt` and send that file.
+Install the DEB and respring. No camera is required.
+After respring, wait about 10 seconds, then optionally open the CarPlay UI if available.
+Send `/var/mobile/A510CarPlayProbe-v02.txt`.
 
-This first probe records process/scene lifecycle and timestamps/sizes of preference files whose names contain CarBridge, CarPlay, or A510. It does not modify CarBridge.
+This version deliberately does NOT hook private methods or modify CarPlay behavior.
+It inventories loaded classes/selectors so the next enabler can target the actual iOS 16 runtime instead of copying iOS 14 hooks.
