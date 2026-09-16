@@ -1,4 +1,4 @@
-# A510CarPlayProbe v0.5
+# A510CarPlayProbe v0.5.1
 Use this build for the in-car test.
 
 1. Install and respring before connecting CarPlay.
@@ -10,3 +10,5 @@ Use this build for the in-car test.
 7. Send /var/mobile/A510CarPlayProbe-v05.txt.
 
 Do not delete the log between OFF and ON.
+
+Build fix: removed the direct FBSDisplayConfiguration isCarDisplay hook that caused the Logos parse error.

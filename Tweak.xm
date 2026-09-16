@@ -23,10 +23,10 @@ static void Snap(NSString*w){
  L([NSString stringWithFormat:@"SNAP %@ CB=%d",w,[a containsObject:T]]);
 }
 
-%hook FBSDisplayConfiguration
-- (BOOL)isCarDisplay { BOOL r=%orig; if(r)L([NSString stringWithFormat:@"DISPLAY isCarDisplay=1 %@",D(self)]); return r; }
-- (BOOL)isCarInstrumentsDisplay { BOOL r=%orig; if(r)L([NSString stringWithFormat:@"DISPLAY instruments=1 %@",D(self)]); return r; }
-%end
+// v0.5.1: no direct FBSDisplayConfiguration hook.
+// We log the display object through FBSScene instead; this avoids a Logos
+// parser conflict seen with isCarDisplay on this Theos toolchain.
+
 
 %hook FBSScene
 - (id)display {

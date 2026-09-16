@@ -1,6 +1,6 @@
 Package: com.sushibta.a510carplayprobe
 Name: A510CarPlayProbe
-Version: 0.5.0
+Version: 0.5.1
 Architecture: iphoneos-arm64
 Description: A510 CarPlay scene/display diagnostic probe.
 Maintainer: sushibta25-design
