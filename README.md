@@ -1,10 +1,13 @@
-# A510CarPlayProbe v0.2
+# A510CarPlayProbe v0.3
 
-Read-only runtime inventory probe for iOS 16.
+Focused read-only-ish diagnostic probe: it hooks CRCarPlayAppPolicy getters/setters
+only to log their original values; it does not change the returned values.
 
-Install the DEB and respring. No camera is required.
-After respring, wait about 10 seconds, then optionally open the CarPlay UI if available.
-Send `/var/mobile/A510CarPlayProbe-v02.txt`.
+Test:
+1. Install v0.3 DEB and respring.
+2. Keep A510Player unticked in CarBridge, open/close CarBridge once.
+3. Tick A510Player, open/close CarBridge once.
+4. If CarPlay is available, connect it and repeat OFF/ON once.
+5. Send /var/mobile/A510CarPlayProbe-v03.txt
 
-This version deliberately does NOT hook private methods or modify CarPlay behavior.
-It inventories loaded classes/selectors so the next enabler can target the actual iOS 16 runtime instead of copying iOS 14 hooks.
+Target bundle: com.sushibta.a510player

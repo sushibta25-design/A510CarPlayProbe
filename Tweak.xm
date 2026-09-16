@@ -2,17 +2,21 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-static NSString * const kPath = @"/var/mobile/A510CarPlayProbe-v02.txt";
+static NSString * const kLogPath = @"/var/mobile/A510CarPlayProbe-v03.txt";
+static NSString * const kTargetBundle = @"com.sushibta.a510player";
 
-static void W(NSString *s) {
+static void PLog(NSString *msg) {
     @autoreleasepool {
-        NSString *line = [NSString stringWithFormat:@"%@ | %@ | %@\n",
-            [NSDate date],
-            NSBundle.mainBundle.bundleIdentifier ?: @"?",
-            s ?: @""];
-        if (![[NSFileManager defaultManager] fileExistsAtPath:kPath])
-            [@"" writeToFile:kPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        NSFileHandle *h=[NSFileHandle fileHandleForWritingAtPath:kPath];
+        NSString *line = [NSString stringWithFormat:@"%@ | proc=%@ | bundle=%@ | %@\n",
+                          [NSDate date],
+                          NSProcessInfo.processInfo.processName ?: @"?",
+                          NSBundle.mainBundle.bundleIdentifier ?: @"?",
+                          msg ?: @""];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:kLogPath]) {
+            [@"" writeToFile:kLogPath atomically:YES
+                    encoding:NSUTF8StringEncoding error:nil];
+        }
+        NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:kLogPath];
         if (h) {
             [h seekToEndOfFile];
             [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
@@ -21,79 +25,105 @@ static void W(NSString *s) {
     }
 }
 
-static BOOL Interesting(NSString *name) {
-    NSString *n=name.lowercaseString;
-    return [n containsString:@"carplay"] ||
-           [n containsString:@"scene"] ||
-           [n containsString:@"display"] ||
-           [n containsString:@"dashboard"];
+static NSString *SafeDesc(id obj) {
+    @try { return obj ? [obj description] : @"nil"; }
+    @catch (__unused NSException *e) { return @"<description threw>"; }
 }
 
-static void DumpMethods(Class c) {
+static NSString *FindTargetBundleInObject(id obj) {
+    if (!obj) return nil;
+    NSString *d = SafeDesc(obj);
+    return [d containsString:kTargetBundle] ? kTargetBundle : nil;
+}
+
+static void LogPolicyObject(id obj, NSString *where) {
+    if (!obj) return;
+    Class c = object_getClass(obj);
     if (!c) return;
-    unsigned int count=0;
-    Method *m=class_copyMethodList(c,&count);
-    NSMutableArray *a=[NSMutableArray array];
-    for (unsigned int i=0;i<count;i++) {
-        NSString *s=NSStringFromSelector(method_getName(m[i]));
-        if (Interesting(s)) [a addObject:s];
-    }
-    free(m);
-    if (a.count) W([NSString stringWithFormat:@"CLASS %@ METHODS %@",NSStringFromClass(c),a]);
+    if (![NSStringFromClass([obj class]) containsString:@"CRCarPlayAppPolicy"]) return;
+
+    BOOL supported = NO, display = NO;
+    @try {
+        if ([obj respondsToSelector:@selector(isCarPlaySupported)])
+            supported = ((BOOL(*)(id,SEL))objc_msgSend)(obj,@selector(isCarPlaySupported));
+        if ([obj respondsToSelector:@selector(canDisplayOnCarScreen)])
+            display = ((BOOL(*)(id,SEL))objc_msgSend)(obj,@selector(canDisplayOnCarScreen));
+    } @catch (__unused NSException *e) {}
+
+    NSString *target = FindTargetBundleInObject(obj);
+    PLog([NSString stringWithFormat:
+          @"POLICY %@ class=%@ targetInDesc=%@ supported=%d display=%d desc=%@",
+          where, NSStringFromClass([obj class]), target ?: @"NO",
+          supported, display, SafeDesc(obj)]);
 }
 
-static void Snapshot(void) {
-    int count=objc_getClassList(NULL,0);
-    if (count<=0) return;
-    Class *classes=(Class *)malloc(sizeof(Class)*count);
-    count=objc_getClassList(classes,count);
+static void Snapshot(NSString *why) {
+    PLog([NSString stringWithFormat:@"=== SNAPSHOT %@ ===", why]);
 
-    W([NSString stringWithFormat:@"=== RUNTIME SNAPSHOT classes=%d process=%@ ===",
-       count, NSProcessInfo.processInfo.processName]);
+    Class policy = NSClassFromString(@"CRCarPlayAppPolicy");
+    PLog([NSString stringWithFormat:@"CRCarPlayAppPolicy=%@",
+          policy ? @"PRESENT" : @"ABSENT"]);
 
-    for (int i=0;i<count;i++) {
-        Class c=classes[i];
-        NSString *name=NSStringFromClass(c);
-        if (Interesting(name)) DumpMethods(c);
-    }
-    free(classes);
-
-    NSArray *targets=@[
-      @"SpringBoard",
-      @"SBApplicationController",
-      @"SBApplication",
-      @"SBDeviceApplicationSceneView",
-      @"SBApplicationSceneView",
-      @"FBScene",
-      @"FBSScene",
-      @"FBSSceneClientSettings",
-      @"FBSDisplayConfiguration",
-      @"CARSessionStatus",
-      @"CRCarPlayAppPolicy",
-      @"CRSUIClusterController",
-      @"CRSUIApplicationSceneSettings"
-    ];
-    for (NSString *n in targets) {
-        Class c=NSClassFromString(n);
-        W([NSString stringWithFormat:@"TARGET %@ = %@",n,c?@"PRESENT":@"ABSENT"]);
-        if (c) DumpMethods(c);
-    }
+    NSString *pref = @"/var/mobile/Library/Preferences/com.leftyfl1p.carbridge13.plist";
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:pref];
+    id bridged = d[@"bridgedApps"];
+    BOOL enabled = [bridged isKindOfClass:[NSArray class]] &&
+                   [(NSArray *)bridged containsObject:kTargetBundle];
+    PLog([NSString stringWithFormat:@"CARBRIDGE bridgedApps target=%d value=%@",
+          enabled, bridged ?: @"nil"]);
 }
+
+%hook CRCarPlayAppPolicy
+
+- (BOOL)isCarPlaySupported {
+    BOOL r = %orig;
+    LogPolicyObject(self, [NSString stringWithFormat:@"isCarPlaySupported -> %d", r]);
+    return r;
+}
+
+- (BOOL)canDisplayOnCarScreen {
+    BOOL r = %orig;
+    LogPolicyObject(self, [NSString stringWithFormat:@"canDisplayOnCarScreen -> %d", r]);
+    return r;
+}
+
+- (void)setCarPlaySupported:(BOOL)v {
+    PLog([NSString stringWithFormat:@"POLICY setCarPlaySupported:%d self=%@", v, SafeDesc(self)]);
+    %orig;
+    LogPolicyObject(self, @"after setCarPlaySupported");
+}
+
+- (void)setCanDisplayOnCarScreen:(BOOL)v {
+    PLog([NSString stringWithFormat:@"POLICY setCanDisplayOnCarScreen:%d self=%@", v, SafeDesc(self)]);
+    %orig;
+    LogPolicyObject(self, @"after setCanDisplayOnCarScreen");
+}
+
+%end
 
 %ctor {
     @autoreleasepool {
-        W(@"PROBE v0.2 LOADED (read-only)");
+        PLog(@"A510CarPlayProbe v0.3 LOADED");
+        Snapshot(@"startup");
+
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5*NSEC_PER_SEC),
                        dispatch_get_main_queue(), ^{
-            Snapshot();
+            Snapshot(@"after-5s");
         });
+
+        [[NSNotificationCenter defaultCenter]
+         addObserverForName:UIApplicationDidBecomeActiveNotification
+         object:nil queue:NSOperationQueue.mainQueue
+         usingBlock:^(__unused NSNotification *n) {
+            Snapshot(@"UIApplicationDidBecomeActive");
+        }];
 
         [[NSNotificationCenter defaultCenter]
          addObserverForName:UISceneDidActivateNotification
          object:nil queue:NSOperationQueue.mainQueue
-         usingBlock:^(NSNotification *n){
-            W([NSString stringWithFormat:@"SCENE ACTIVE class=%@ desc=%@",
-               NSStringFromClass([n.object class]), n.object]);
-         }];
+         usingBlock:^(NSNotification *n) {
+            PLog([NSString stringWithFormat:@"SCENE ACTIVE %@", SafeDesc(n.object)]);
+            Snapshot(@"scene-active");
+        }];
     }
 }
