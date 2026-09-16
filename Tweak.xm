@@ -1,6 +1,12 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+
+@interface NSObject (A510CarPlayProbePolicy)
+- (BOOL)isCarPlaySupported;
+- (BOOL)canDisplayOnCarScreen;
+@end
 
 static NSString * const kLogPath = @"/var/mobile/A510CarPlayProbe-v03.txt";
 static NSString * const kTargetBundle = @"com.sushibta.a510player";
@@ -45,9 +51,9 @@ static void LogPolicyObject(id obj, NSString *where) {
     BOOL supported = NO, display = NO;
     @try {
         if ([obj respondsToSelector:@selector(isCarPlaySupported)])
-            supported = ((BOOL(*)(id,SEL))objc_msgSend)(obj,@selector(isCarPlaySupported));
+            supported = [obj isCarPlaySupported];
         if ([obj respondsToSelector:@selector(canDisplayOnCarScreen)])
-            display = ((BOOL(*)(id,SEL))objc_msgSend)(obj,@selector(canDisplayOnCarScreen));
+            display = [obj canDisplayOnCarScreen];
     } @catch (__unused NSException *e) {}
 
     NSString *target = FindTargetBundleInObject(obj);
